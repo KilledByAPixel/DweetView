@@ -2,7 +2,9 @@
 
 A visual browser for [Dwitter](https://www.dwitter.net), the site for tiny JavaScript programs that fit in 140 characters.
 
-![Dweet View](screenshot.png)
+## [🚀 Try it live!](https://killedbyapixel.github.io/DweetView/)
+
+[![Dweet View](screenshot.png)](https://killedbyapixel.github.io/DweetView/)
 
 ## How to use
 
