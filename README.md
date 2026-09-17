@@ -12,6 +12,7 @@ A visual browser for [Dwitter](https://www.dwitter.net), the site for tiny JavaS
 - Double click it there to open it on Dwitter
 - Enter a username and press *Recent* or *Awesome* to see their dweets
 - Leave the username blank to see dweets by everyone
+- Click a name under the search box to see dweets by a top user
 - Scroll down to load more
 
 ## Links
@@ -25,14 +26,18 @@ Every view has a link you can share.
 | `?awesome=1` | Most awesome dweets by everyone |
 | `?d=ID` | A single dweet |
 
+## Running it
+
+Dweet View is a single HTML file with no dependencies and no build step. Open `index.html` in a browser, or host it on any static web server.
+
 ## How it works
 
-Dweet View is a single HTML file with no dependencies and no build step. It gets dweets from the public Dwitter API, so any static web server can host it.
+Dweets come from the public Dwitter API, 100 at a time as you scroll.
 
-Each dweet runs in its own sandboxed iframe, so dweet code can not touch the page. The page and the dweets talk using messages. Only dweets near the screen are kept loaded, and only the dweet under the mouse is animated.
+Each dweet runs in its own sandboxed iframe, so dweet code can not touch the page. The page and the dweets talk using messages. Only dweets near the screen are kept loaded, and only the dweet under the mouse is animated. Loops in dweet code get a time limit, so a slow dweet can not lock up the page.
 
 To search through every dweet, try [The Dweetabase](https://dweetabase.3d2k.com).
 
 ## License
 
-Dweet View is MIT licensed. All dweets are property of their respective creators!
+Dweet View is MIT licensed, see [LICENSE](LICENSE). All dweets are property of their respective creators!

@@ -18,11 +18,7 @@ URL parameters
 <title>Dweet View</title>
 <link rel=icon type=image/png href=favicon.png>
 <style>
-body
-{
-    overflow: visible;
-    text-align: center;
-}
+body { text-align: center; }
 body,input,select
 {
     font-family: 'courier';
@@ -138,8 +134,9 @@ You have reached the bottom! Visit <a href=https://www.dwitter.net target=_blank
 const apiUrl = 'https://www.dwitter.net/apiv2beta/';
 const dweetUrl = 'https://www.dwitter.net/d/';
 const FPS = 60;
-const fetchLimit = 100;
-const warmupFrames = 2;
+const fetchLimit = 100;         // how many dweets to get at a time
+const warmupFrames = 2;         // how many frames to run a dweet when it is created
+const dweetCanvasWidth = 1920;  // dweets use a 1920x1080 canvas
 
 // dweets that are so slow they dont get to warmup
 const noWarmupDweets = [24541, 25987, 29210];
@@ -160,22 +157,26 @@ const topUsers = ['KilledByAPixel','pavel','tomxor','rodrigo.siqueira','jylikang
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|Windows Phone/i.test(navigator.userAgent);
 const dweetSizeScale = isMobile ? 1 : .2;
 
-let size = 1;
-let dweetList = [];
-let loadQueue = [];
-let loadQueueRequested = 0;
-let focusDweet = 0;
-let hoverDweet = 0;
-let isLoading = 0;
-let fetchId = 0;
-let nextUrl = '';
-let mostAwesome = 0;
+// search settings, these come from the url
 let user = '';
+let mostAwesome = 0;
 let singleDweetId = 0;
+
+let size = 1;                   // dweet size setting
+let dweetList = [];             // all the dweets on the page
+let loadQueue = [];             // dweets that are waiting for an iframe
+let loadQueueRequested = 0;
+let focusDweet = 0;             // the dweet that is playing
+let hoverDweet = 0;             // the dweet under the mouse
+let isLoading = 0;
+let fetchId = 0;                // used to ignore results from old searches
+let nextUrl = '';               // where to get the next page of dweets
 
 ///////////////////////////////////////////////////////////////////////////////
 // Dweet Runner - this function is the code that runs inside of each dweet's iframe
 // The iframes are sandboxed so dweets can not access this page, all communication is by messages
+//     messages to a dweet:   load, play, pause, event
+//     messages from a dweet: error, uncompressed, paused
 
 function DweetRunner()
 {
@@ -191,7 +192,7 @@ function DweetRunner()
 
     function Load(message)
     {
-        // init globals
+        // init globals that dweets can use
         window.x = canvas.getContext('2d');
         window.S = Math.sin;
         window.C = Math.cos;
@@ -203,7 +204,7 @@ function DweetRunner()
         window.LOOP_COUNT = 0;
         window.LOOP_TIMEOUT = 0;
         window.code = window.src = message.code;
-        window.reset = ()=> {};
+        window.reset = ()=> {}; // some dweets call this
 
         // auto uncompress code
         let uncompressed = '';
@@ -234,7 +235,7 @@ function DweetRunner()
 
     function Compile(code)
     {
-        // apply loop protection
+        // apply loop protection, add a check to loops that throws if a frame takes too long
         code = code.replace
         (
             /(for\s*\([^;]*;[^;]*;|while\s*\()\s*(\S)/g,
@@ -320,6 +321,7 @@ function DweetRunner()
 
     function RouteEvent(name, event)
     {
+        // call the dweet's event handler if it has one
         event.target = canvas;
         event.preventDefault = event.stopPropagation = ()=> {};
         for (const object of [window, canvas])
@@ -403,6 +405,17 @@ function LoadPage()
         FetchUserStats();
 }
 
+async function FetchJSON(url)
+{
+    // returns the data, 0 if there was no valid result, or undefined if the fetch failed
+    let response;
+    try { response = await fetch(url); }
+    catch (e) { return; }
+
+    try { return response.ok ? await response.json() : 0; }
+    catch (e) { return 0; }
+}
+
 async function FetchDweets(url)
 {
     const id = ++fetchId;
@@ -410,14 +423,7 @@ async function FetchDweets(url)
     div_loading.innerText = 'Loading...';
     div_loading.classList.remove('hidden');
 
-    let data = 0, fetchFailed = 0;
-    try
-    {
-        const response = await fetch(url);
-        try { data = response.ok && await response.json(); } catch (e) {}
-    }
-    catch (e) { fetchFailed = 1; }
-
+    const data = await FetchJSON(url);
     if (id != fetchId)
         return; // a newer search was started
 
@@ -429,9 +435,9 @@ async function FetchDweets(url)
 
     isLoading = 0;
     div_loading.classList.add('hidden');
-    if (fetchFailed || !dweetList.length && !nextUrl)
+    if (data == undefined || !dweetList.length && !nextUrl)
     {
-        div_loading.innerText = fetchFailed ? 'Could not reach Dwitter!' : 'No matching dweets found!';
+        div_loading.innerText = data == undefined ? 'Could not reach Dwitter!' : 'No matching dweets found!';
         div_loading.classList.remove('hidden');
         return;
     }
@@ -445,17 +451,12 @@ async function FetchDweets(url)
 async function FetchUserStats()
 {
     const id = fetchId;
-    try
-    {
-        const response = await fetch(`${apiUrl}users/${encodeURIComponent(user)}/stats/`);
-        const data = await response.json();
-        if (id != fetchId || data.dweet_count == undefined)
-            return;
+    const data = await FetchJSON(`${apiUrl}users/${encodeURIComponent(user)}/stats/`);
+    if (id != fetchId || !data || data.dweet_count == undefined)
+        return;
 
-        div_info.innerText = `Total Dweets: ${data.dweet_count} ~ Total Awesomes: ${data.awesome_count}`;
-        div_info.classList.remove('hidden');
-    }
-    catch (e) {}
+    div_info.innerText = `Total Dweets: ${data.dweet_count} ~ Total Awesomes: ${data.awesome_count}`;
+    div_info.classList.remove('hidden');
 }
 
 function CheckGetMore()
@@ -472,6 +473,7 @@ function CheckGetMore()
 
 function ButtonSearch(awesome=mostAwesome, searchUser=input_author.value.trim())
 {
+    // put the search in the url so it can be shared and the back button works
     const url = new URL(location.href);
     url.search = '';
     if (searchUser)
@@ -505,17 +507,14 @@ function AddDweet(dweet)
     span.dweet = dweet;
     span.onmouseenter = e=> { hoverDweet = dweet; UpdateFocus(); }
     span.onmouseleave = e=> { hoverDweet == dweet && (hoverDweet = 0); UpdateFocus(); }
+
     // double click to open dweet by itself, or on dwitter if already by itself
     span.ondblclick = e=> window.open(singleDweetId ? dweetUrl + dweet.id : location.pathname + '?d=' + dweet.id);
 
-    // route mouse input to iframe
-    for (const name of ['onclick', 'onmousedown', 'onmouseup', 'onmousemove'])
-        span[name] = e=>
-        {
-            if (name == 'onclick')
-                input_author.value = dweet.author.username;
-            RouteEvent(dweet, name, e);
-        }
+    // click to select the author and route mouse input to the dweet
+    span.onclick = e=> { input_author.value = dweet.author.username; RouteEvent(dweet, 'onclick', e); }
+    for (const name of ['onmousedown', 'onmouseup', 'onmousemove'])
+        span[name] = e=> RouteEvent(dweet, name, e);
 
     SetDweetSize(dweet, GetDweetSize());
     div_dweets.appendChild(span);
@@ -561,7 +560,7 @@ function RouteEvent(dweet, name, e)
     if (!dweet.iframe)
         return;
 
-    // make mouse position relative to the iframe
+    // events can not be sent in a message, so send a copy with the mouse position relative to the iframe
     const bounding = dweet.iframe.getBoundingClientRect();
     const x = e.clientX - bounding.left, y = e.clientY - bounding.top;
     const event =
@@ -573,13 +572,9 @@ function RouteEvent(dweet, name, e)
     PostToDweet(dweet, {type:'event', name, event});
 }
 
-// route key input to the focus dweet
-for (const name of ['onkeydown', 'onkeyup', 'onkeypress'])
-    window[name] = e=> focusDweet && e.target == document.body && RouteEvent(focusDweet, name, e);
-
-// handle messages from dweets
-onmessage = e=>
+function OnDweetMessage(e)
 {
+    // handle messages from dweets, dont trust them because dweets can send anything
     const message = e.data;
     const dweet = dweetList.find(dweet=> dweet.iframe && dweet.iframe.contentWindow == e.source);
     if (!dweet || !message)
@@ -647,7 +642,7 @@ function UpdateLoadQueue()
 
 function UpdateSize()
 {
-    size = select_size.value;
+    size = +select_size.value;
 
     const dweetSize = GetDweetSize();
     for (const dweet of dweetList)
@@ -658,8 +653,8 @@ function UpdateSize()
 
 function GetDweetSize()
 {
-    const windowWidth = window.innerWidth - (isMobile ? 40 : 150);
-    let width = 1920*size*dweetSizeScale;
+    const windowWidth = window.innerWidth - (isMobile ? 40 : 150); // leave some space on the sides
+    let width = dweetCanvasWidth*size*dweetSizeScale;
 
     // fit a whole number of dweets across the window
     let fit = windowWidth / width | 0;
@@ -699,10 +694,11 @@ function UpdateFocus()
     let dweet = hoverDweet;
 
     // if only 1 can fit across then focus on the first dweet in the viewport
-    const width = 1920*size*dweetSizeScale;
+    const width = dweetCanvasWidth*size*dweetSizeScale;
     if (!dweet && (isMobile || window.innerWidth < 2*width || dweetList.length == 1))
         dweet = dweetList.find(dweet=> dweet.iframe && IsInViewport(dweet.span)) || 0;
 
+    // only the focus dweet is animated
     if (dweet != focusDweet)
     {
         if (focusDweet)
@@ -727,6 +723,7 @@ function UpdateOverlay()
         return;
     }
 
+    // count characters the same way dwitter does, by code points
     const CountCharacters = string=> [...string].length;
     let info = `👍${dweet.awesome_count} ${CountCharacters(dweet.code)}`;
     if (dweet.uncompressed)
@@ -782,6 +779,11 @@ function Init()
     onpopstate = LoadPage;
     onresize = UpdateSize;
     onscroll = e=> { UpdateFocus(); CheckGetMore(); }
+    onmessage = OnDweetMessage;
+
+    // route key input to the focus dweet
+    for (const name of ['onkeydown', 'onkeyup', 'onkeypress'])
+        window[name] = e=> focusDweet && e.target == document.body && RouteEvent(focusDweet, name, e);
 
     LoadPage();
 }
