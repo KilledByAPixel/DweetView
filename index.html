@@ -773,8 +773,8 @@ function Init()
     {
         const button = document.createElement('button');
         button.innerText = name;
-        button.title = 'Show most awesome dweets by ' + name;
-        button.onclick = e=> ButtonSearch(1, name);
+        button.title = 'Show dweets by ' + name;
+        button.onclick = e=> ButtonSearch(mostAwesome, name); // keep the current sort mode
         div_topUsers.appendChild(button);
     }
 
